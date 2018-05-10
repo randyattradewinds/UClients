@@ -7,7 +7,7 @@ uses
   Buttons, ExtCtrls,   StdCtrls, DBCtrls,
   Oracle, OracleData, Db, Grids, DBGrids, Mask, ComCtrls, shellapi,
   wwcheckbox, Wwdbigrd, Wwdbgrid, wwdbdatetimepicker, wwdblook, wwdbedit,
-  Wwdotdot, Wwdbcomb;
+  Wwdotdot, Wwdbcomb, FileCtrl ;
 
 type
   TformJobs = class(TForm)
@@ -249,6 +249,10 @@ type
     wwCheckBox3: TwwCheckBox;
     chkIncomplete: TCheckBox;
     chkActive: TCheckBox;
+    btnCreateFolder: TSpeedButton;
+    shapeExploreFolder: TShape;
+    Label37: TLabel;
+    chkComplete: TCheckBox;
     procedure btnExitClick(Sender: TObject);
     procedure btn_edit_incidentClick(Sender: TObject);
     procedure btn_create_incidentClick(Sender: TObject);
@@ -327,6 +331,7 @@ type
     procedure SpeedButton1Click(Sender: TObject);
     procedure q_incidentAfterPost(DataSet: TDataSet);
     procedure q_incidentAfterEdit(DataSet: TDataSet);
+    procedure btnCreateFolderClick(Sender: TObject);
   private
     { Private declarations }
     parent_top,parent_left : integer;
@@ -345,6 +350,7 @@ type
     procedure load_notes;
     procedure LoadEmployees;
     procedure LoadDueDate;
+    procedure ShowFolderExists;
   public
     { Public declarations }
     IncomingJobID: string;
@@ -546,7 +552,7 @@ procedure tformJobs.load_notes;
          sql.add('ORDER BY NOTES_DATE DESC, SEQ DESC');
          active := true;
        end;
-     if fileexists('t:\data\techsupport\'+q_incident.fieldbyname('INCIDENT_ID').asstring+'*.*') then
+     if fileexists(JobsFolder+q_incident.fieldbyname('INCIDENT_ID').asstring+'*.*') then
        btn_files.Enabled := true
      else
        btn_files.enabled := false;
@@ -580,6 +586,8 @@ Var MyIncidentID : String;
             sql.add('AND CLOSED_BY IS NULL');
           if chkIncomplete.checked then
             sql.add('AND nvl(COMPLETED,''FALSE'') =''FALSE''');
+          if chkComplete.checked then
+            sql.add('AND nvl(COMPLETED,''FALSE'') =''TRUE''');
           if chkActive.checked then
             sql.add('AND nvl(ACTIVE,''FALSE'') =''TRUE''');
           if chkNonCritical.checked = false then
@@ -1124,6 +1132,7 @@ begin
   set_billable_fields;
   load_notes;
   q_notes.first;
+  ShowFolderExists;
 end;
 
 procedure TformJobs.q_incidentAfterCancel(DataSet: TDataSet);
@@ -1146,6 +1155,7 @@ begin
   load_notes;
   //q_notes.last;
   shapeHighlightSave.visible := false;
+  ShowFolderExists;
 end;
 
 procedure TformJobs.t_employeesAfterOpen(DataSet: TDataSet);
@@ -1576,6 +1586,7 @@ begin
   shapeHighlightSave.visible := true;
   q_incident.FieldByName('CURRENT_OWNER').asstring := ClientTrackEmployee;
   q_incident.fieldbyname('DATE_CREATED').asdatetime := date;
+  ShowFolderExists;
 end;
 
 procedure TformJobs.SpeedButton1Click(Sender: TObject);
@@ -1593,6 +1604,7 @@ procedure TformJobs.q_incidentAfterPost(DataSet: TDataSet);
 begin
   q_incident.refreshrecord;
   shapeHighlightSave.visible := false;
+  ShowFolderExists;
 end;
 
 
@@ -1600,6 +1612,76 @@ end;
 procedure TformJobs.q_incidentAfterEdit(DataSet: TDataSet);
 begin
   shapeHighlightSave.visible := true;
+end;
+
+procedure TformJobs.ShowFolderExists;
+  var OriginalDirectory : string;
+  var currentDirectory : string;
+  foldername : string;
+ error : Integer;
+ begin
+OriginalDirectory:= GetCurrentDir;
+  SetCurrentDir(JobsFolder);
+  currentDirectory := GetCurrentDir;
+  //ShowMessage('Current directory = '+GetCurrentDir);
+   foldername := q_incident.fieldbyname('INCIDENT_ID').asstring;
+   shapeExploreFolder.visible := false;
+
+   if empty(foldername) then
+     begin
+       btnCreateFolder.caption :='Create Folder';
+       exit;
+     end;
+    if directoryexists(foldername) then
+      begin
+        btnCreateFolder.caption :='Open Folder';
+        shapeExploreFolder.visible := true;
+      end
+    else
+     btnCreateFolder.caption :='Create Folder';
+     SetCurrentDir(OriginalDirectory);
+  end;
+
+procedure TformJobs.btnCreateFolderClick(Sender: TObject);
+ var OriginalDirectory : string;
+  foldername : string;
+ error : Integer;
+begin
+ OriginalDirectory:= GetCurrentDir;
+  SetCurrentDir(JobsFolder);
+  //ShowMessage('Current directory = '+GetCurrentDir);
+   foldername := q_incident.fieldbyname('INCIDENT_ID').asstring;
+
+
+   if empty(foldername) then
+     begin
+       ShowMessage('Must have a job I.D. before creating a folder.');
+       exit;
+     end;
+    if directoryexists(foldername) then
+      begin
+         ShellExecute(Application.Handle,
+         nil,
+         'explorer.exe',
+          PChar(JobsFolder+foldername), //wherever you want the window to open to
+          nil,
+          SW_NORMAL     //see other possibilities by ctrl+clicking on SW_NORMAL
+           );
+         exit;
+       end;
+   SetCurrentDir(JobsFolder);
+  {$IOChecks off}
+  MkDir(foldername);
+   SetCurrentDir(OriginalDirectory);
+  // Did the directory get created OK?
+  {
+  error := IOResult;
+  if error = 0
+  then ShowMessage('Directory created OK')
+  else ShowMessageFmt('Directory creation failed with error %d',[error]);
+  SetCurrentDir(OriginalDirectory);
+  }
+  {$IOChecks on}
 end;
 
 end.
